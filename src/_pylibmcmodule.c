@@ -759,8 +759,6 @@ static PyObject *PylibMC_Client_gets(PylibMC_Client *self, PyObject *arg) {
     *keys = PyBytes_AS_STRING(arg);
     *keylengths = (size_t)PyBytes_GET_SIZE(arg);
 
-    Py_DECREF(arg);
-
     Py_BEGIN_ALLOW_THREADS;
 
     rc = memcached_mget(self->mc, keys, keylengths, 1);
@@ -768,6 +766,8 @@ static PyObject *PylibMC_Client_gets(PylibMC_Client *self, PyObject *arg) {
         res = memcached_fetch_result(self->mc, res, &rc);
 
     Py_END_ALLOW_THREADS;
+
+    Py_DECREF(arg);
 
     int miss = 0;
     int fail = 0;
@@ -2463,14 +2463,6 @@ static int _key_normalized_obj(PyObject **key) {
     key_str = PyBytes_AS_STRING(retval);
     key_sz = PyBytes_GET_SIZE(retval);
     rc = _key_normalized_str(&key_str, &key_sz);
-    if (rc == 2) {
-        retval = PyBytes_FromStringAndSize(key_str, key_sz);
-        if (retval != NULL) {
-            rc = 1;
-        } else {
-            rc = 0;
-        }
-    }
 
 END:
     if (retval != orig_key) {
@@ -2488,9 +2480,7 @@ END:
 }
 
 /**
- * Normalize memcached key.
- *
- * Returns 0 if invalid, 1 if already normalized, and 2 if mutated.
+ * Validate a memcached key.  Returns 0 if invalid, 1 if valid.
  */
 static int _key_normalized_str(char **str, Py_ssize_t *size) {
     /* libmemcached pads max_key_size with one byte for null termination */
