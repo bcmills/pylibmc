@@ -1666,7 +1666,10 @@ static pylibmc_mget_res _fetch_multi(memcached_st *mc,
         result = memcached_fetch_result(mc, result, &res.rc);
 
         if (result == NULL || res.rc == MEMCACHED_END) {
-            /* This is how libmecached signals EOF. */
+            /* memcached_fetch_result returns NULL once all servers are
+             * exhausted.  res.rc distinguishes normal completion
+             * (MEMCACHED_END, MEMCACHED_NOTFOUND) from errors
+             * (e.g. MEMCACHED_CONNECTION_FAILURE). */
             break;
         } else if (res.rc == MEMCACHED_BAD_KEY_PROVIDED
                 || res.rc == MEMCACHED_NO_KEY_PROVIDED) {
@@ -1678,7 +1681,6 @@ static pylibmc_mget_res _fetch_multi(memcached_st *mc,
         }
     }
 
-    res.rc = MEMCACHED_SUCCESS;
     return res;
 }
 
@@ -1797,7 +1799,12 @@ static PyObject *PylibMC_Client_get_multi(
     res = _fetch_multi(self->mc, req);
     Py_END_ALLOW_THREADS;
 
-    if (res.rc != MEMCACHED_SUCCESS) {
+    /* _fetch_multi returns the rc from the final memcached_fetch_result
+     * call.  Per the libmemcached docs, that function sets rc to END on
+     * successful conclusion, or NOTFOUND if no keys matched — both are
+     * normal outcomes for get_multi.  Any other code (e.g.
+     * CONNECTION_FAILURE) is an actual error. */
+    if (res.rc != MEMCACHED_END && res.rc != MEMCACHED_NOTFOUND) {
         PylibMC_ErrFromMemcached(self, res.err_func, res.rc);
         goto earlybird;
     }
